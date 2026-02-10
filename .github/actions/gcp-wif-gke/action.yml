@@ -34,6 +34,10 @@ runs:
       with:
         project_id: ${{ inputs.project_id }}
 
+    - name: Install gke-gcloud-auth-plugin
+      shell: bash
+      run: gcloud components install gke-gcloud-auth-plugin --quiet
+
     - name: Configure kubectl for GKE
       shell: bash
       run: |

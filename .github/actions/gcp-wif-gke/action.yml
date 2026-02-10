@@ -1,0 +1,42 @@
+# Composite: authenticate to GCP via Workload Identity Federation and configure kubectl for GKE.
+# Reusable by any app (mono-bff, backend-api, etc.) that deploys to GKE.
+# Requires: permissions.id-token: write in the calling workflow.
+name: 'GCP WIF Auth and GKE'
+description: 'Authenticate to GCP via GitHub WIF and set up kubectl for a GKE cluster'
+inputs:
+  project_id:
+    description: 'GCP project ID'
+    required: true
+  cluster_name:
+    description: 'GKE cluster name'
+    required: true
+  region:
+    description: 'GCP region of the cluster'
+    required: true
+  workload_identity_provider:
+    description: 'Full WIF provider resource name (projects/N/locations/global/workloadIdentityPools/.../providers/...)'
+    required: true
+  service_account:
+    description: 'GCP Service Account email to impersonate'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        project_id: ${{ inputs.project_id }}
+        workload_identity_provider: ${{ inputs.workload_identity_provider }}
+        service_account: ${{ inputs.service_account }}
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+      with:
+        project_id: ${{ inputs.project_id }}
+
+    - name: Configure kubectl for GKE
+      shell: bash
+      run: |
+        gcloud container clusters get-credentials "${{ inputs.cluster_name }}" \
+          --region "${{ inputs.region }}" \
+          --project "${{ inputs.project_id }}"

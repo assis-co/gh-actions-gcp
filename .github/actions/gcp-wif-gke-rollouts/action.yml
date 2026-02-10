@@ -1,0 +1,42 @@
+# Composite: GCP WIF + GKE + kubectl-argo-rollouts. Use for apps that deploy via Argo Rollouts.
+# Depends on gcp-wif-gke for auth; adds rollout CLI so caller only does set image / status.
+name: 'GCP WIF Auth, GKE and Argo Rollouts'
+description: 'Auth to GCP via WIF, configure GKE kubectl, and install kubectl-argo-rollouts'
+inputs:
+  project_id:
+    description: 'GCP project ID'
+    required: true
+  cluster_name:
+    description: 'GKE cluster name'
+    required: true
+  region:
+    description: 'GCP region of the cluster'
+    required: true
+  workload_identity_provider:
+    description: 'Full WIF provider resource name'
+    required: true
+  service_account:
+    description: 'GCP Service Account email'
+    required: true
+  rollouts_version:
+    description: 'kubectl-argo-rollouts version'
+    required: false
+    default: '1.8.3'
+runs:
+  using: 'composite'
+  steps:
+    - name: Authenticate and configure GKE
+      uses: assis-co/gh-actions-gcp/.github/actions/gcp-wif-gke@main
+      with:
+        project_id: ${{ inputs.project_id }}
+        cluster_name: ${{ inputs.cluster_name }}
+        region: ${{ inputs.region }}
+        workload_identity_provider: ${{ inputs.workload_identity_provider }}
+        service_account: ${{ inputs.service_account }}
+
+    - name: Install kubectl-argo-rollouts
+      uses: supplypike/setup-bin@v4
+      with:
+        uri: 'https://github.com/argoproj/argo-rollouts/releases/latest/download/kubectl-argo-rollouts-linux-amd64'
+        name: 'kubectl-argo-rollouts'
+        version: ${{ inputs.rollouts_version }}

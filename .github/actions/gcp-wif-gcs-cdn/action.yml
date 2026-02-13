@@ -1,0 +1,62 @@
+# Composite: authenticate to GCP via WIF, upload path to GCS bucket, invalidate Cloud CDN.
+# Use for static frontend deploy (build in caller workflow, then use this for upload + CDN invalidation).
+# Requires: permissions.id-token: write in the calling workflow.
+# SA needs: roles/storage.objectAdmin on bucket, compute.urlMaps.invalidateCache (or roles/compute.loadBalancerAdmin).
+name: 'GCP WIF Auth + GCS Upload + Cloud CDN Invalidate'
+description: 'Authenticate via WIF, rsync local path to GCS bucket, invalidate CDN cache'
+inputs:
+  project_id:
+    description: 'GCP project ID'
+    required: true
+  workload_identity_provider:
+    description: 'Full WIF provider resource name'
+    required: true
+  service_account:
+    description: 'GCP Service Account email to impersonate'
+    required: true
+  bucket:
+    description: 'GCS bucket name (no gs:// prefix)'
+    required: true
+  path:
+    description: 'Local path to sync (e.g. dist or build)'
+    required: true
+    default: 'dist'
+  url_map:
+    description: 'URL map name for Cloud CDN invalidation (optional; skip invalidation if empty)'
+    required: false
+    default: ''
+runs:
+  using: 'composite'
+  steps:
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        project_id: ${{ inputs.project_id }}
+        workload_identity_provider: ${{ inputs.workload_identity_provider }}
+        service_account: ${{ inputs.service_account }}
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+      with:
+        project_id: ${{ inputs.project_id }}
+
+    - name: Upload to GCS
+      shell: bash
+      run: |
+        gsutil -m rsync -r -d ${{ inputs.path }} gs://${{ inputs.bucket }}
+      env:
+        CLOUDSDK_CORE_PROJECT: ${{ inputs.project_id }}
+
+    - name: Invalidate Cloud CDN cache
+      if: inputs.url_map != ''
+      shell: bash
+      run: |
+        gcloud compute url-maps invalidate-cdn-cache ${{ inputs.url_map }} --path "/*"
+      env:
+        CLOUDSDK_CORE_PROJECT: ${{ inputs.project_id }}
+
+    - name: Summary
+      shell: bash
+      run: |
+        echo "Deployed to gs://${{ inputs.bucket }}"
+        if [ -n "${{ inputs.url_map }}" ]; then echo "CDN cache invalidated (URL map: ${{ inputs.url_map }})"; fi
